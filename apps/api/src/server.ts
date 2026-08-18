@@ -39,6 +39,8 @@ try {
 
 const app = express();
 const port = Number(process.env.PORT ?? 4100);
+const webDistPath = fileURLToPath(new URL("../../web/dist", import.meta.url));
+const webIndexPath = fileURLToPath(new URL("../../web/dist/index.html", import.meta.url));
 
 app.disable("x-powered-by");
 app.use(express.json({ limit: "32kb" }));
@@ -198,6 +200,11 @@ app.post("/api/v1/simulations/:sessionId/complete", async (request, response) =>
     return;
   }
   response.json(result.data);
+});
+
+app.use(express.static(webDistPath));
+app.get(/^(?!\/api\/).*/, (_request, response) => {
+  response.sendFile(webIndexPath);
 });
 
 app.use((_request, response) => {
