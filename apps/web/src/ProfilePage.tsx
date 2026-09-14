@@ -4,6 +4,7 @@ import {
   BookOpen,
   Check,
   ChevronRight,
+  Compass,
   GraduationCap,
   Layers3,
   LineChart,
@@ -24,7 +25,7 @@ import { NavLink } from "react-router-dom";
 import { api } from "./api";
 import { robotAssets } from "./robot";
 import { useTheme, type Theme } from "./theme";
-import type { Course, ProfileData } from "./types";
+import type { CareerOverview, Course, ProfileData } from "./types";
 
 const profileDate = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "numeric" });
 
@@ -60,6 +61,7 @@ export function ProfilePage() {
       <ProfileHero data={data}/>
       <ProfileStats data={data}/>
       <AppearanceSettings theme={theme} setTheme={setTheme}/>
+      <CareerCompassSummary/>
       <ContinueLearning data={data}/>
       <CourseProgress courses={data.courses}/>
       <QuizHistory data={data}/>
@@ -69,6 +71,35 @@ export function ProfilePage() {
       <aside className="profile-helper"><img src={robotAssets.reading} alt="Крипто-помощник читает прогресс"/><div><strong>Не гонись за процентом</strong><p>{data.robotMessage}</p></div></aside>
       <p className="profile-note">В профиле хранится только учебная активность. Реальных счетов, кошельков и финансовых данных здесь нет.</p>
     </div>
+  );
+}
+
+function CareerCompassSummary() {
+  const [career, setCareer] = useState<CareerOverview | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    api.careerOverview(controller.signal).then(setCareer).catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
+  const result = career?.latestResult;
+  return (
+    <section className="profile-section profile-career-section">
+      <ProfileHeading eyebrow="Персональный маршрут" title="Карьерный компас" action={result ? "Готов" : undefined}/>
+      <NavLink className="profile-career-card" to={result ? `/career/result/${result.attemptId}` : "/career"}>
+        <span className="profile-career-card__icon"><Compass/></span>
+        <div>
+          {result ? (
+            <><small>Главное совпадение</small><strong>{result.topRoles[0]?.role.title ?? "Результат готов"}</strong><p>{result.headline}</p></>
+          ) : career?.activeAttempt ? (
+            <><small>Прохождение сохранено</small><strong>{career.activeAttempt.answeredCount} из {career.activeAttempt.totalQuestions} ответов</strong><p>Продолжи с того места, где остановился.</p></>
+          ) : (
+            <><small>40 вопросов · около 10 минут</small><strong>Найди подходящие роли в крипте</strong><p>Получишь три направления и объяснение выбора.</p></>
+          )}
+        </div>
+        <ChevronRight/>
+      </NavLink>
+    </section>
   );
 }
 

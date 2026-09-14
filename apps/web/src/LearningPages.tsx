@@ -157,6 +157,12 @@ export function LessonPage() {
               </span>
               <span className="lesson-page-card__eyebrow">{page.eyebrow}</span>
               <h2>{page.title}</h2>
+              {page.illustration && (
+                <figure className="lesson-page-card__illustration">
+                  <img src={page.illustration.src} alt={page.illustration.alt} />
+                  {page.illustration.caption && <figcaption>{page.illustration.caption}</figcaption>}
+                </figure>
+              )}
               <p>{page.body}</p>
             </article>
           ) : (

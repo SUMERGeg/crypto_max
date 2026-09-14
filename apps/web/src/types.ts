@@ -46,6 +46,11 @@ export type LessonPage =
       eyebrow: string;
       title: string;
       body: string;
+      illustration?: {
+        src: string;
+        alt: string;
+        caption?: string;
+      };
     }
   | {
       id: string;
@@ -394,4 +399,68 @@ export type SimulationState = {
   trades: SimulationTrade[];
   canComplete: boolean;
   result: SimulationResult | null;
+};
+
+export type CareerRole = {
+  id: string;
+  title: string;
+  shortDescription: string;
+  dailyTasks: string[];
+  challenge: string;
+  entrySkills: string[];
+  learningPath: string[];
+  practiceTask: string;
+  accent: string;
+  disclaimer: string | null;
+};
+
+export type CareerOverview = {
+  title: string;
+  description: string;
+  estimatedMinutes: number;
+  questionCount: number;
+  roleCount: number;
+  blocks: Array<{ number: number; title: string; questionCount: number }>;
+  roles: CareerRole[];
+  activeAttempt: { id: string; answeredCount: number; totalQuestions: number } | null;
+  latestResult: {
+    attemptId: string;
+    completedAt: string;
+    headline: string;
+    topRoles: Array<{ role: CareerRole; fitPercent: number }>;
+  } | null;
+};
+
+export type CareerQuestion = {
+  id: string;
+  order: number;
+  block: number;
+  blockTitle: string;
+  type: "SCALE_INTEREST" | "SCALE_SELF" | "SINGLE_CHOICE";
+  text: string;
+  options: Array<{ id: string; text: string }>;
+};
+
+export type CareerAttempt = {
+  id: string;
+  status: "IN_PROGRESS" | "COMPLETED";
+  startedAt: string;
+  completedAt: string | null;
+  answeredCount: number;
+  totalQuestions: number;
+  answers: Record<string, string>;
+  questions: CareerQuestion[];
+  resultReady: boolean;
+};
+
+export type CareerResult = {
+  attemptId: string;
+  completedAt: string;
+  headline: string;
+  summary: string;
+  quality: { level: "STABLE" | "CLOSE" | "MIXED"; label: string; text: string };
+  topRoles: Array<{ role: CareerRole; fitPercent: number; reasons: string[]; challenge: string }>;
+  allRoleScores: Array<{ roleId: string; title: string; fitPercent: number }>;
+  dimensions: Array<{ id: string; label: string; value: number; description: string }>;
+  disclaimer: string;
 };

@@ -1,4 +1,4 @@
-import type { Course, CourseLessons, HomeData, Lesson, MarketAssetDetail, MarketAssetList, MarketNewsArticle, MarketNewsSummary, MarketPeriod, ProfileData, Quiz, QuizAnswer, QuizResult, ScenarioSummary, SecurityCase, SecurityCaseResult, SecurityCaseSummary, SecurityProgress, SimulationResult, SimulationState, ThreatCard, ThreatSummary } from "./types";
+import type { CareerAttempt, CareerOverview, CareerResult, CareerRole, Course, CourseLessons, HomeData, Lesson, MarketAssetDetail, MarketAssetList, MarketNewsArticle, MarketNewsSummary, MarketPeriod, ProfileData, Quiz, QuizAnswer, QuizResult, ScenarioSummary, SecurityCase, SecurityCaseResult, SecurityCaseSummary, SecurityProgress, SimulationResult, SimulationState, ThreatCard, ThreatSummary } from "./types";
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/v1${path}`, { signal });
@@ -48,6 +48,13 @@ export const api = {
   threats: (signal?: AbortSignal) => getJson<ThreatSummary[]>("/security/threats", signal),
   threat: (threatId: string, signal?: AbortSignal) => getJson<ThreatCard>(`/security/threats/${encodeURIComponent(threatId)}`, signal),
   profile: (signal?: AbortSignal) => getJson<ProfileData>("/profile", signal),
+  careerOverview: (signal?: AbortSignal) => getJson<CareerOverview>("/career", signal),
+  createCareerAttempt: (restart = false) => sendJson<CareerAttempt>("/career/attempts", "POST", { restart }),
+  careerAttempt: (attemptId: string, signal?: AbortSignal) => getJson<CareerAttempt>(`/career/attempts/${encodeURIComponent(attemptId)}`, signal),
+  saveCareerAnswer: (attemptId: string, questionId: string, optionId: string) => sendJson<CareerAttempt>(`/career/attempts/${encodeURIComponent(attemptId)}/answers`, "POST", { questionId, optionId }),
+  completeCareerAttempt: (attemptId: string) => sendJson<CareerResult>(`/career/attempts/${encodeURIComponent(attemptId)}/complete`, "POST"),
+  careerResult: (attemptId: string, signal?: AbortSignal) => getJson<CareerResult>(`/career/results/${encodeURIComponent(attemptId)}`, signal),
+  careerRole: (roleId: string, signal?: AbortSignal) => getJson<CareerRole>(`/career/roles/${encodeURIComponent(roleId)}`, signal),
   scenarios: (signal?: AbortSignal) => getJson<ScenarioSummary[]>("/scenarios", signal),
   createSimulation: (scenarioId: string) => sendJson<SimulationState>("/simulations", "POST", { scenarioId }),
   simulationState: (sessionId: string, signal?: AbortSignal) => getJson<SimulationState>(`/simulations/${sessionId}/state`, signal),

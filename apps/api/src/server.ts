@@ -30,6 +30,15 @@ import { getMarketNews, listMarketNews } from "./market-news.js";
 import { configureSecurityRepository, getSecurityCase, getSecurityProgress, getThreat, listSecurityCases, listThreats, submitSecurityCase } from "./security-data.js";
 import { createSecurityRepository } from "./security-persistence.js";
 import { getFullProfile } from "./profile-data.js";
+import {
+  completeCareerAttempt,
+  createCareerAttempt,
+  getCareerAttempt,
+  getCareerOverview,
+  getCareerResult,
+  getCareerRole,
+  saveCareerAnswer,
+} from "./career-data.js";
 
 try {
   loadEnvFile(fileURLToPath(new URL("../../../.env", import.meta.url)));
@@ -158,6 +167,40 @@ app.get("/api/v1/security/threats/:threatId", (request, response) => {
 app.get("/api/v1/security/progress", async (_request, response) => response.json(await getSecurityProgress(user.id)));
 app.get("/api/v1/profile", async (_request, response) => {
   response.json(await getFullProfile());
+});
+
+app.get("/api/v1/career", (_request, response) => response.json(getCareerOverview(user.id)));
+app.post("/api/v1/career/attempts", (request, response) => {
+  response.status(201).json(createCareerAttempt(user.id, request.body?.restart === true));
+});
+app.get("/api/v1/career/attempts/:attemptId", (request, response) => {
+  const attempt = getCareerAttempt(request.params.attemptId, user.id);
+  attempt ? response.json(attempt) : response.status(404).json({ message: "Career attempt not found" });
+});
+app.post("/api/v1/career/attempts/:attemptId/answers", (request, response) => {
+  const { questionId, optionId } = request.body ?? {};
+  if (typeof questionId !== "string" || typeof optionId !== "string") {
+    response.status(400).json({ message: "Question and option are required" });
+    return;
+  }
+  const attempt = saveCareerAnswer(request.params.attemptId, user.id, questionId, optionId);
+  attempt ? response.json(attempt) : response.status(400).json({ message: "Career answer is invalid" });
+});
+app.post("/api/v1/career/attempts/:attemptId/complete", (request, response) => {
+  const result = completeCareerAttempt(request.params.attemptId, user.id);
+  if ("data" in result) {
+    response.json(result.data);
+    return;
+  }
+  response.status(result.error === "NOT_FOUND" ? 404 : 400).json({ message: result.error === "NOT_FOUND" ? "Career attempt not found" : "Answer every question before completing" });
+});
+app.get("/api/v1/career/results/:attemptId", (request, response) => {
+  const result = getCareerResult(request.params.attemptId, user.id);
+  result ? response.json(result) : response.status(404).json({ message: "Career result not found" });
+});
+app.get("/api/v1/career/roles/:roleId", (request, response) => {
+  const role = getCareerRole(request.params.roleId);
+  role ? response.json(role) : response.status(404).json({ message: "Career role not found" });
 });
 
 app.get("/api/v1/scenarios", (_request, response) => response.json(listScenarios()));

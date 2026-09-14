@@ -3,6 +3,7 @@ import {
   BookOpen,
   ChevronRight,
   CircleUserRound,
+  Compass,
   GraduationCap,
   Home,
   Landmark,
@@ -20,6 +21,7 @@ import { api } from "./api";
 import { CourseLessonsPage, LessonPage, QuizPage, QuizResultPage } from "./LearningPages";
 import { MarketAssetPage, MarketNewsPage, MarketPage } from "./MarketPages";
 import { ProfilePage } from "./ProfilePage";
+import { CareerLandingPage, CareerResultPage, CareerRolePage, CareerTestPage } from "./CareerPages";
 import { SecurityCasePage, SecurityPage, ThreatPage } from "./SecurityPages";
 import { PracticePage, ReplayPage, ReplayResultPage, ScenarioIntroPage } from "./SimulationPages";
 import { robotAssets } from "./robot";
@@ -67,6 +69,10 @@ export function App() {
             <Route path="/market/news/:newsId" element={<MarketNewsPage />} />
             <Route path="/market/:symbol" element={<MarketAssetPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/career" element={<CareerLandingPage />} />
+            <Route path="/career/test/:attemptId" element={<CareerTestPage />} />
+            <Route path="/career/result/:attemptId" element={<CareerResultPage />} />
+            <Route path="/career/roles/:roleId" element={<CareerRolePage />} />
           </Routes>
         </div>
         {showBottomNav && <BottomNav />}
@@ -142,6 +148,13 @@ function HomePage() {
           <QuickLink to="/market" icon={<Landmark />} title="Крипторынок" subtitle="Цены и новости" tone="violet" />
         </div>
       </section>
+
+      <NavLink className="career-home-card" to="/career">
+        <div className="career-home-card__icon"><Compass/></div>
+        <div><span>Новая возможность</span><strong>Карьерный компас</strong><p>40 вопросов помогут найти подходящие роли в криптоиндустрии.</p><small>8–12 минут · 10 направлений</small></div>
+        <img src={robotAssets.thinking} alt="" aria-hidden="true"/>
+        <ChevronRight className="career-home-card__arrow"/>
+      </NavLink>
 
       <section className="progress-card">
         <div className="progress-card__top">

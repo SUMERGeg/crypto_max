@@ -1,3 +1,6 @@
+import { cryptoLessonSpecs, type CryptoLessonPageSpec, type CryptoLessonSpec } from "./crypto-lessons.js";
+import { digitalRubleLessonSpec } from "./law-lessons.js";
+
 type LessonStatus = "NOT_STARTED" | "OPENED" | "COMPLETED";
 type SectionType = "TEXT" | "EXAMPLE" | "KEY_TAKEAWAY" | "RISK" | "BULLETS";
 
@@ -9,6 +12,7 @@ type LessonContentPage = {
   eyebrow: string;
   title: string;
   body: string;
+  illustration?: CryptoLessonPageSpec["illustration"];
 };
 type LessonCheckpointPage = {
   id: string;
@@ -39,6 +43,8 @@ type LessonRecord = {
   durationMinutes: number;
   order: number;
   sections: LessonSection[];
+  detailedPages?: CryptoLessonPageSpec[];
+  checkpointAfter?: [number, number];
   robotTip: string;
   quiz: { id: string; title: string; questions: QuizQuestion[] };
 };
@@ -95,6 +101,40 @@ function lesson(
   };
 }
 
+function expandedCryptoLesson(spec: CryptoLessonSpec): LessonRecord {
+  const questions = spec.questions.map((item) => question(item.id, item.text, item.correct, item.wrong, item.explanation));
+  return {
+    id: spec.id,
+    courseId: "crypto-basics",
+    order: spec.order,
+    title: spec.title,
+    shortDescription: spec.shortDescription,
+    durationMinutes: spec.durationMinutes,
+    robotTip: spec.robotTip,
+    sections: spec.pages.map((page) => ({ type: page.sectionType, title: page.title, body: page.body })),
+    detailedPages: spec.pages,
+    checkpointAfter: spec.checkpointAfter,
+    quiz: { id: `quiz-${spec.id}`, title: `Итоговый тест: ${spec.title}`, questions },
+  };
+}
+
+function expandedLawLesson(spec: CryptoLessonSpec): LessonRecord {
+  const questions = spec.questions.map((item) => question(item.id, item.text, item.correct, item.wrong, item.explanation));
+  return {
+    id: spec.id,
+    courseId: "law-russia",
+    order: spec.order,
+    title: spec.title,
+    shortDescription: spec.shortDescription,
+    durationMinutes: spec.durationMinutes,
+    robotTip: spec.robotTip,
+    sections: spec.pages.map((page) => ({ type: page.sectionType, title: page.title, body: page.body })),
+    detailedPages: spec.pages,
+    checkpointAfter: spec.checkpointAfter,
+    quiz: { id: `quiz-${spec.id}`, title: `Итоговый тест: ${spec.title}`, questions },
+  };
+}
+
 const depthNotes: Record<string, string> = {
   "crypto-intro": "Важно отличать сам актив от способа доступа к нему. В телефоне лежит не монета, а программа-кошелёк и данные, с помощью которых владелец подтверждает действия. Если телефон сломался, актив не исчезает из общей истории. Но потеря секретных данных доступа может лишить человека возможности им распоряжаться. Сеть проверяет право создать перевод, но не знает, ошибся ли человек адресом.",
   "crypto-bitcoin": "Новые BTC появляются по заранее заданным правилам и постепенно всё медленнее. Это позволяет заранее оценить максимальное предложение, но не количество монет, доступных для покупки сегодня: часть могла быть потеряна или долго не двигаться. Перевод также не становится мгновенно окончательным — обычно ждут несколько подтверждений, потому что каждый следующий блок усиливает уверенность в записи.",
@@ -119,9 +159,8 @@ const depthNotes: Record<string, string> = {
 };
 
 function learningPages(item: LessonRecord): LessonPage[] {
-  const [intro, steps, example, takeaway] = item.sections;
   const [firstCheck, secondCheck, finalQuestion] = item.quiz.questions;
-  if (!intro || !steps || !example || !takeaway || !firstCheck || !secondCheck || !finalQuestion) return [];
+  if (!firstCheck || !secondCheck || !finalQuestion) return [];
 
   const checkpoint = (quizQuestion: QuizQuestion, order: number): LessonCheckpointPage => ({
     id: `${item.id}-checkpoint-${order}`,
@@ -135,6 +174,30 @@ function learningPages(item: LessonRecord): LessonPage[] {
       explanation: quizQuestion.explanation,
     },
   });
+
+  if (item.detailedPages && item.checkpointAfter) {
+    const checkpointByPage = new Map<number, LessonCheckpointPage>([
+      [item.checkpointAfter[0], checkpoint(firstCheck, 1)],
+      [item.checkpointAfter[1], checkpoint(secondCheck, 2)],
+    ]);
+    return item.detailedPages.flatMap((page, index) => {
+      const pageNumber = index + 1;
+      const contentPage: LessonContentPage = {
+        id: `${item.id}-detail-${pageNumber}`,
+        kind: "CONTENT",
+        sectionType: page.sectionType,
+        eyebrow: page.eyebrow,
+        title: page.title,
+        body: page.body,
+        illustration: page.illustration,
+      };
+      const check = checkpointByPage.get(pageNumber);
+      return check ? [contentPage, check] : [contentPage];
+    });
+  }
+
+  const [intro, steps, example, takeaway] = item.sections;
+  if (!intro || !steps || !example || !takeaway) return [];
 
   const commonMistake = finalQuestion.options.find((option) => !option.isCorrect)?.text ?? "делать вывод по одному признаку";
   const depthNote = depthNotes[item.id] ?? "Свяжи определение с конкретным действием: что именно происходит, кто проверяет правило и какой риск остаётся. Такое объяснение полезнее заученного термина, потому что помогает распознать похожую ситуацию в жизни.";
@@ -158,7 +221,7 @@ function learningPages(item: LessonRecord): LessonPage[] {
   ];
 }
 
-export const lessons: LessonRecord[] = [
+const legacyLessons: LessonRecord[] = [
   lesson(
     "crypto-intro", "crypto-basics", 1, "Что такое криптовалюта?", "Цифровые деньги без единого центра управления",
     "Криптовалюта — это ценность в цифровом виде. У неё нет бумажных купюр и монет. Информация о том, кому она принадлежит, записана сразу у многих компьютеров. Такую группу компьютеров называют сетью.",
@@ -421,6 +484,13 @@ export const lessons: LessonRecord[] = [
   ),
 ];
 
+export const lessons: LessonRecord[] = [
+  ...cryptoLessonSpecs.map(expandedCryptoLesson),
+  ...legacyLessons
+    .filter((item) => item.courseId !== "crypto-basics")
+    .map((item) => item.id === digitalRubleLessonSpec.id ? expandedLawLesson(digitalRubleLessonSpec) : item),
+];
+
 const completedLessonIds = new Set<string>(["crypto-intro"]);
 const openedLessonIds = new Set<string>(["blockchain-ledger"]);
 let lastOpenedLessonId = "blockchain-ledger";
@@ -486,7 +556,7 @@ export function getLessons(courseId: string) {
     .filter((item) => item.courseId === courseId)
     .sort((a, b) => a.order - b.order)
     .map((item) => {
-      const { quiz: _quiz, sections: _sections, robotTip: _robotTip, ...summary } = item;
+      const { quiz: _quiz, sections: _sections, detailedPages: _detailedPages, checkpointAfter: _checkpointAfter, robotTip: _robotTip, ...summary } = item;
       return { ...summary, pageCount: learningPages(item).length, status: lessonStatus(item.id) };
     });
 }
@@ -494,7 +564,7 @@ export function getLessons(courseId: string) {
 export function getLesson(lessonId: string) {
   const item = lessons.find((candidate) => candidate.id === lessonId);
   if (!item) return undefined;
-  const { quiz, ...lessonData } = item;
+  const { quiz, detailedPages: _detailedPages, checkpointAfter: _checkpointAfter, ...lessonData } = item;
   return {
     ...lessonData,
     pages: learningPages(item),
