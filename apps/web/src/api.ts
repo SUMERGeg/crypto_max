@@ -1,7 +1,17 @@
 import type { CareerAttempt, CareerOverview, CareerResult, CareerRole, Course, CourseLessons, HomeData, Lesson, MarketAssetDetail, MarketAssetList, MarketNewsArticle, MarketNewsSummary, MarketPeriod, ProfileData, Quiz, QuizAnswer, QuizResult, ScenarioSummary, SecurityCase, SecurityCaseResult, SecurityCaseSummary, SecurityProgress, SimulationResult, SimulationState, ThreatCard, ThreatSummary } from "./types";
 
+let accessToken = "";
+
+export function setApiAccessToken(token: string) {
+  accessToken = token;
+}
+
+function authHeaders(): Record<string, string> {
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+}
+
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`/api/v1${path}`, { signal });
+  const response = await fetch(`/api/v1${path}`, { signal, headers: authHeaders() });
 
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`);
@@ -13,7 +23,7 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 async function sendJson<T>(path: string, method: "POST", body?: unknown, headers?: Record<string, string>): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     method,
-    headers: body === undefined ? headers : { "Content-Type": "application/json", ...headers },
+    headers: body === undefined ? { ...authHeaders(), ...headers } : { "Content-Type": "application/json", ...authHeaders(), ...headers },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) throw new Error(`Request failed: ${response.status}`);
@@ -22,6 +32,14 @@ async function sendJson<T>(path: string, method: "POST", body?: unknown, headers
 }
 
 export const api = {
+  maxConfig: () => getJson<{ maxRequired: boolean }>("/auth/config"),
+  signInMax: async (initData: string) => {
+    const response = await fetch("/api/v1/auth/max", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData }),
+    });
+    if (!response.ok) throw new Error(`MAX sign-in failed: ${response.status}`);
+    return response.json() as Promise<{ accessToken: string; user: { id: string; displayName: string } }>;
+  },
   home: (signal?: AbortSignal) => getJson<HomeData>("/home", signal),
   courses: (signal?: AbortSignal) => getJson<Course[]>("/courses", signal),
   courseLessons: async (courseId: string, signal?: AbortSignal): Promise<CourseLessons> => {

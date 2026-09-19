@@ -16,7 +16,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { api } from "./api";
 import { CourseLessonsPage, LessonPage, QuizPage, QuizResultPage } from "./LearningPages";
 import { MarketAssetPage, MarketNewsPage, MarketPage } from "./MarketPages";
@@ -26,6 +26,7 @@ import { SecurityCasePage, SecurityPage, ThreatPage } from "./SecurityPages";
 import { PracticePage, ReplayPage, ReplayResultPage, ScenarioIntroPage } from "./SimulationPages";
 import { robotAssets } from "./robot";
 import type { Course, HomeData } from "./types";
+import { currentMaxLaunchData } from "./max-client";
 
 function useRemoteData<T>(loader: (signal: AbortSignal) => Promise<T>) {
   const [data, setData] = useState<T | null>(null);
@@ -45,7 +46,22 @@ function useRemoteData<T>(loader: (signal: AbortSignal) => Promise<T>) {
 
 export function App() {
   const location = useLocation();
+  const navigate = useNavigate();
   const showBottomNav = ["/", "/learn", "/practice", "/security", "/market", "/profile"].includes(location.pathname);
+
+  useEffect(() => {
+    if (!currentMaxLaunchData()) return;
+    const button = window.WebApp?.BackButton;
+    if (!button) return;
+    if (location.pathname === "/") {
+      button.hide();
+      return;
+    }
+    const goBack = () => navigate(-1);
+    button.show();
+    button.onClick(goBack);
+    return () => button.offClick(goBack);
+  }, [location.pathname, navigate]);
 
   return (
     <main className="app-canvas">

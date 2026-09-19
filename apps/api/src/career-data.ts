@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { CareerRepository } from "./career-persistence.js";
 
 type InterestAxis = "R" | "I" | "A" | "S" | "E" | "C";
 type StyleAxis = "AN" | "PR" | "ST" | "AD" | "SC" | "CO" | "IN" | "CR";
@@ -43,7 +44,7 @@ type CareerRole = {
   disclaimer?: string;
 };
 
-type CareerAttempt = {
+export type CareerAttempt = {
   id: string;
   userId: string;
   questionnaireVersion: string;
@@ -348,6 +349,13 @@ const questions: Question[] = [
 ];
 
 const attempts = new Map<string, CareerAttempt>();
+let careerRepository: CareerRepository | null = null;
+
+export async function initializeCareerState(repository: CareerRepository) {
+  careerRepository = repository;
+  attempts.clear();
+  for (const attempt of await repository.loadAll()) attempts.set(attempt.id, attempt);
+}
 
 const dimensionMeta: Record<InterestAxis | StyleAxis, { label: string; description: string }> = {
   R: { label: "Практические системы", description: "Настраивать, запускать и поддерживать работающие решения" },
@@ -596,7 +604,7 @@ export function getCareerOverview(userId: string) {
   };
 }
 
-export function createCareerAttempt(userId: string, restart = false) {
+export async function createCareerAttempt(userId: string, restart = false) {
   if (!restart) {
     const active = [...attempts.values()].find((item) => item.userId === userId && item.status === "IN_PROGRESS");
     if (active) return publicAttempt(active);
@@ -606,6 +614,7 @@ export function createCareerAttempt(userId: string, restart = false) {
     status: "IN_PROGRESS", startedAt: new Date().toISOString(), completedAt: null, answers: {}, result: null,
   };
   attempts.set(attempt.id, attempt);
+  await careerRepository?.save(attempt);
   return publicAttempt(attempt);
 }
 
@@ -614,16 +623,17 @@ export function getCareerAttempt(attemptId: string, userId: string) {
   return attempt?.userId === userId ? publicAttempt(attempt) : null;
 }
 
-export function saveCareerAnswer(attemptId: string, userId: string, questionId: string, optionId: string) {
+export async function saveCareerAnswer(attemptId: string, userId: string, questionId: string, optionId: string) {
   const attempt = attempts.get(attemptId);
   if (!attempt || attempt.userId !== userId || attempt.status !== "IN_PROGRESS") return null;
   const question = questions.find((item) => item.id === questionId);
   if (!question?.options.some((item) => item.id === optionId)) return null;
   attempt.answers[questionId] = optionId;
+  await careerRepository?.save(attempt);
   return publicAttempt(attempt);
 }
 
-export function completeCareerAttempt(attemptId: string, userId: string) {
+export async function completeCareerAttempt(attemptId: string, userId: string) {
   const attempt = attempts.get(attemptId);
   if (!attempt || attempt.userId !== userId) return { error: "NOT_FOUND" as const };
   if (attempt.result) return { data: attempt.result };
@@ -631,6 +641,7 @@ export function completeCareerAttempt(attemptId: string, userId: string) {
   attempt.status = "COMPLETED";
   attempt.completedAt = new Date().toISOString();
   attempt.result = buildResult(attempt);
+  await careerRepository?.save(attempt);
   return { data: attempt.result };
 }
 

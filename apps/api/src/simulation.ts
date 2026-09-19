@@ -148,10 +148,10 @@ async function persistSession(session: Session, force = false) {
   session.lastCheckpointAt = Date.now();
 }
 
-async function getSession(id: string) {
+async function getSession(id: string, userId: string) {
   const cached = sessions.get(id);
-  if (cached) return cached;
-  const saved = await repository().load(id, demoUserId);
+  if (cached) return cached.userId === userId ? cached : null;
+  const saved = await repository().load(id, userId);
   if (!saved) return null;
   const scenario = historicalScenarios.find((item) => item.id === saved.scenarioId);
   if (!scenario) return null;
@@ -243,8 +243,8 @@ export function listScenarios() {
   }));
 }
 
-export async function listCompletedSimulations() {
-  const completed = await repository().listCompleted(demoUserId);
+export async function listCompletedSimulations(userId = demoUserId) {
+  const completed = await repository().listCompleted(userId);
   return completed.map((item) => {
     const scenario = historicalScenarios.find((candidate) => candidate.id === item.scenarioId);
     const result = item.result as SimulationResult;
@@ -262,11 +262,11 @@ export async function listCompletedSimulations() {
   });
 }
 
-export async function createSimulation(scenarioId: string) {
+export async function createSimulation(scenarioId: string, userId = demoUserId) {
   const scenario = historicalScenarios.find((item) => item.id === scenarioId);
   if (!scenario) return null;
   const session: Session = {
-    id: randomUUID(), userId: demoUserId, scenario, status: "ACTIVE", cashRub: scenario.startingBalanceRub,
+    id: randomUUID(), userId, scenario, status: "ACTIVE", cashRub: scenario.startingBalanceRub,
     positions: new Map(), trades: [], elapsedMs: 0, resumedAt: Date.now(), result: null,
     idempotencyKeys: new Set(), lastCheckpointAt: 0,
   };
@@ -275,8 +275,8 @@ export async function createSimulation(scenarioId: string) {
   return publicState(session);
 }
 
-export async function getSimulationState(id: string) {
-  const session = await getSession(id);
+export async function getSimulationState(id: string, userId = demoUserId) {
+  const session = await getSession(id, userId);
   if (!session) return null;
   if (session.status === "COMPLETED" && session.result?.schemaVersion !== 2) {
     session.result = await buildSimulationResult(session);
@@ -286,8 +286,8 @@ export async function getSimulationState(id: string) {
   return publicState(session);
 }
 
-export async function pauseSimulation(id: string) {
-  const session = await getSession(id);
+export async function pauseSimulation(id: string, userId = demoUserId) {
+  const session = await getSession(id, userId);
   if (!session || session.status === "COMPLETED") return null;
   if (session.status === "ACTIVE" && session.resumedAt) {
     session.elapsedMs = Math.min(session.scenario.durationMs, session.elapsedMs + Date.now() - session.resumedAt);
@@ -298,8 +298,8 @@ export async function pauseSimulation(id: string) {
   return publicState(session);
 }
 
-export async function resumeSimulation(id: string) {
-  const session = await getSession(id);
+export async function resumeSimulation(id: string, userId = demoUserId) {
+  const session = await getSession(id, userId);
   if (!session || session.status === "COMPLETED") return null;
   if (session.status === "PAUSED" && session.elapsedMs < session.scenario.durationMs) {
     session.status = "ACTIVE";
@@ -309,8 +309,8 @@ export async function resumeSimulation(id: string) {
   return publicState(session);
 }
 
-export async function makeTrade(id: string, body: Record<string, unknown>, idempotencyKey?: string) {
-  const session = await getSession(id);
+export async function makeTrade(id: string, body: Record<string, unknown>, idempotencyKey?: string, userId = demoUserId) {
+  const session = await getSession(id, userId);
   if (!session) return { error: "Сессия не найдена", status: 404 } as const;
   if (session.status === "COMPLETED") return { error: "Симуляция уже завершена", status: 409 } as const;
   if (idempotencyKey && session.idempotencyKeys.has(idempotencyKey)) return { data: publicState(session) } as const;
@@ -518,8 +518,8 @@ async function buildSimulationResult(session: Session): Promise<SimulationResult
   };
 }
 
-export async function completeSimulation(id: string) {
-  const session = await getSession(id);
+export async function completeSimulation(id: string, userId = demoUserId) {
+  const session = await getSession(id, userId);
   if (!session) return { error: "Сессия не найдена", status: 404 } as const;
   if (session.result?.schemaVersion === 2) return { data: session.result } as const;
   const state = publicState(session);

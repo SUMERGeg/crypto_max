@@ -33,9 +33,9 @@ class MemoryProgressRepository implements ProgressRepository {
     const existing = this.progress.get(userId);
     if (existing) return structuredClone(existing);
     const seeded: ProgressSnapshot = {
-      completedLessonIds: ["crypto-intro"],
-      openedLessonIds: ["blockchain-ledger"],
-      lastOpenedLessonId: "blockchain-ledger",
+      completedLessonIds: userId === "demo-user" ? ["crypto-intro"] : [],
+      openedLessonIds: userId === "demo-user" ? ["blockchain-ledger"] : [],
+      lastOpenedLessonId: userId === "demo-user" ? "blockchain-ledger" : null,
       quizAttempts: [],
     };
     this.progress.set(userId, seeded);

@@ -491,21 +491,22 @@ export const lessons: LessonRecord[] = [
     .map((item) => item.id === digitalRubleLessonSpec.id ? expandedLawLesson(digitalRubleLessonSpec) : item),
 ];
 
-const completedLessonIds = new Set<string>(["crypto-intro"]);
-const openedLessonIds = new Set<string>(["blockchain-ledger"]);
-let lastOpenedLessonId = "blockchain-ledger";
-const quizAttempts: Array<{ quizId: string; lessonId: string; scorePercent: number; completedAt: string }> = [];
 let progressRepository: ProgressRepository | null = null;
 
-function lessonStatus(lessonId: string): LessonStatus {
-  if (completedLessonIds.has(lessonId)) return "COMPLETED";
-  if (openedLessonIds.has(lessonId)) return "OPENED";
+async function snapshotFor(currentUser: AppUser): Promise<ProgressSnapshot> {
+  if (!progressRepository) throw new Error("Learning repository is not configured");
+  return progressRepository.getSnapshot(currentUser.id, currentUser.displayName);
+}
+
+function lessonStatus(lessonId: string, snapshot: ProgressSnapshot): LessonStatus {
+  if (snapshot.completedLessonIds.includes(lessonId)) return "COMPLETED";
+  if (snapshot.openedLessonIds.includes(lessonId)) return "OPENED";
   return "NOT_STARTED";
 }
 
-function progressFor(courseId?: string) {
+function progressFor(snapshot: ProgressSnapshot, courseId?: string) {
   const relevant = courseId ? lessons.filter((item) => item.courseId === courseId) : lessons;
-  const completedLessons = relevant.filter((item) => completedLessonIds.has(item.id)).length;
+  const completedLessons = relevant.filter((item) => snapshot.completedLessonIds.includes(item.id)).length;
   const totalLessons = relevant.length;
   return { completedLessons, totalLessons, percent: totalLessons === 0 ? 0 : Math.round((completedLessons / totalLessons) * 100) };
 }
@@ -524,61 +525,49 @@ export const user = { id: "demo-user", displayName: "Алексей" };
 
 export async function initializeLearningState(repository: ProgressRepository) {
   progressRepository = repository;
-  const snapshot = await repository.getSnapshot(user.id, user.displayName);
-  completedLessonIds.clear();
-  openedLessonIds.clear();
-  quizAttempts.length = 0;
-  snapshot.completedLessonIds.forEach((id) => completedLessonIds.add(id));
-  snapshot.openedLessonIds.forEach((id) => openedLessonIds.add(id));
-  snapshot.quizAttempts.forEach((attempt) => quizAttempts.push({
-    quizId: attempt.quizId,
-    lessonId: attempt.lessonId,
-    scorePercent: attempt.scorePercent,
-    completedAt: attempt.completedAt,
-  }));
-  lastOpenedLessonId = snapshot.lastOpenedLessonId ?? lessons[0]!.id;
 }
 
-export function getCourses() {
+export async function getCourses(currentUser: AppUser) {
+  const snapshot = await snapshotFor(currentUser);
   return courseCatalog.map((course) => ({
     ...course,
     lessonCount: lessons.filter((item) => item.courseId === course.id).length,
-    progress: progressFor(course.id),
+    progress: progressFor(snapshot, course.id),
   }));
 }
 
-export function getCourse(courseId: string) {
-  return getCourses().find((course) => course.id === courseId);
+export async function getCourse(courseId: string, currentUser: AppUser) {
+  return (await getCourses(currentUser)).find((course) => course.id === courseId);
 }
 
-export function getLessons(courseId: string) {
+export async function getLessons(courseId: string, currentUser: AppUser) {
+  const snapshot = await snapshotFor(currentUser);
   return lessons
     .filter((item) => item.courseId === courseId)
     .sort((a, b) => a.order - b.order)
     .map((item) => {
       const { quiz: _quiz, sections: _sections, detailedPages: _detailedPages, checkpointAfter: _checkpointAfter, robotTip: _robotTip, ...summary } = item;
-      return { ...summary, pageCount: learningPages(item).length, status: lessonStatus(item.id) };
+      return { ...summary, pageCount: learningPages(item).length, status: lessonStatus(item.id, snapshot) };
     });
 }
 
-export function getLesson(lessonId: string) {
+export async function getLesson(lessonId: string, currentUser: AppUser) {
   const item = lessons.find((candidate) => candidate.id === lessonId);
   if (!item) return undefined;
+  const snapshot = await snapshotFor(currentUser);
   const { quiz, detailedPages: _detailedPages, checkpointAfter: _checkpointAfter, ...lessonData } = item;
   return {
     ...lessonData,
     pages: learningPages(item),
     pageCount: learningPages(item).length,
     quizId: quiz.id,
-    status: lessonStatus(item.id),
+    status: lessonStatus(item.id, snapshot),
   };
 }
 
-export async function openLesson(lessonId: string) {
+export async function openLesson(lessonId: string, currentUser: AppUser) {
   if (!lessons.some((item) => item.id === lessonId)) return false;
-  await progressRepository?.openLesson(user.id, user.displayName, lessonId);
-  openedLessonIds.add(lessonId);
-  lastOpenedLessonId = lessonId;
+  await progressRepository?.openLesson(currentUser.id, currentUser.displayName, lessonId);
   return true;
 }
 
@@ -599,7 +588,7 @@ export function getQuizByLesson(lessonId: string) {
   };
 }
 
-export async function submitQuiz(quizId: string, answers: Array<{ questionId: string; optionIds: string[] }>) {
+export async function submitQuiz(quizId: string, answers: Array<{ questionId: string; optionIds: string[] }>, currentUser: AppUser) {
   const item = lessons.find((candidate) => candidate.quiz.id === quizId);
   if (!item || answers.length !== item.quiz.questions.length) return undefined;
 
@@ -633,7 +622,7 @@ export async function submitQuiz(quizId: string, answers: Array<{ questionId: st
   const scorePercent = Math.round((correctAnswers / item.quiz.questions.length) * 100);
   const passed = scorePercent >= 67;
   const completedAt = new Date().toISOString();
-  await progressRepository?.recordQuizAttempt(user.id, user.displayName, {
+  await progressRepository?.recordQuizAttempt(currentUser.id, currentUser.displayName, {
     quizId,
     lessonId: item.id,
     correctAnswers,
@@ -642,11 +631,7 @@ export async function submitQuiz(quizId: string, answers: Array<{ questionId: st
     answers,
     completedAt,
   }, passed);
-  if (passed) {
-    completedLessonIds.add(item.id);
-    openedLessonIds.delete(item.id);
-  }
-  quizAttempts.push({ quizId, lessonId: item.id, scorePercent, completedAt });
+  const snapshot = await snapshotFor(currentUser);
   const courseLessons = lessons.filter((candidate) => candidate.courseId === item.courseId).sort((a, b) => a.order - b.order);
   const currentIndex = courseLessons.findIndex((candidate) => candidate.id === item.id);
   const nextLessonId = courseLessons[currentIndex + 1]?.id ?? null;
@@ -659,19 +644,20 @@ export async function submitQuiz(quizId: string, answers: Array<{ questionId: st
     scorePercent,
     passed,
     passingScorePercent: 67,
-    completedLesson: completedLessonIds.has(item.id),
+    completedLesson: snapshot.completedLessonIds.includes(item.id),
     details,
-    courseProgress: progressFor(item.courseId),
-    overallProgress: progressFor(),
-    nextLessonId: completedLessonIds.has(item.id) ? nextLessonId : null,
+    courseProgress: progressFor(snapshot, item.courseId),
+    overallProgress: progressFor(snapshot),
+    nextLessonId: snapshot.completedLessonIds.includes(item.id) ? nextLessonId : null,
   };
 }
 
-export function getHome() {
-  const continueLesson = lessons.find((item) => item.id === lastOpenedLessonId) ?? lessons[0]!;
+export async function getHome(currentUser: AppUser) {
+  const snapshot = await snapshotFor(currentUser);
+  const continueLesson = lessons.find((item) => item.id === snapshot.lastOpenedLessonId) ?? lessons[0]!;
   const course = courseCatalog.find((item) => item.id === continueLesson.courseId)!;
   return {
-    user,
+    user: currentUser,
     continueLesson: {
       id: continueLesson.id,
       courseId: continueLesson.courseId,
@@ -679,10 +665,10 @@ export function getHome() {
       title: continueLesson.title,
       lessonNumber: continueLesson.order,
       totalCourseLessons: lessons.filter((item) => item.courseId === continueLesson.courseId).length,
-      status: lessonStatus(continueLesson.id),
-      progressPercent: progressFor(continueLesson.courseId).percent,
+      status: lessonStatus(continueLesson.id, snapshot),
+      progressPercent: progressFor(snapshot, continueLesson.courseId).percent,
     },
-    overallProgress: progressFor(),
+    overallProgress: progressFor(snapshot),
     market,
     latestNews: {
       id: "cfa-rules",
@@ -695,8 +681,10 @@ export function getHome() {
   };
 }
 
-export function getProfile() {
-  const lastLesson = lessons.find((item) => item.id === lastOpenedLessonId) ?? lessons[0]!;
+export async function getProfile(currentUser: AppUser) {
+  const snapshot = await snapshotFor(currentUser);
+  const quizAttempts = snapshot.quizAttempts;
+  const lastLesson = lessons.find((item) => item.id === snapshot.lastOpenedLessonId) ?? lessons[0]!;
   const lastLessonCourse = courseCatalog.find((item) => item.id === lastLesson.courseId)!;
   const resultsByLesson = new Map<string, { lessonId: string; lessonTitle: string; courseTitle: string; bestScore: number; lastScore: number; lastAttemptAt: string; attemptCount: number }>();
   for (const attempt of quizAttempts) {
@@ -715,18 +703,18 @@ export function getProfile() {
     });
   }
   const quizResults = [...resultsByLesson.values()].sort((a, b) => Date.parse(b.lastAttemptAt) - Date.parse(a.lastAttemptAt));
-  const overallProgress = progressFor();
+  const overallProgress = progressFor(snapshot);
   return {
-    user,
+    user: currentUser,
     overallProgress,
-    courses: getCourses(),
+    courses: await getCourses(currentUser),
     lastLesson: {
       id: lastLesson.id,
       title: lastLesson.title,
       courseId: lastLesson.courseId,
       courseTitle: lastLessonCourse.title,
-      status: lessonStatus(lastLesson.id),
-      progressPercent: progressFor(lastLesson.courseId).percent,
+      status: lessonStatus(lastLesson.id, snapshot),
+      progressPercent: progressFor(snapshot, lastLesson.courseId).percent,
     },
     quizStats: {
       attemptCount: quizAttempts.length,
@@ -734,7 +722,8 @@ export function getProfile() {
       lastScore: quizAttempts.at(-1)?.scorePercent ?? null,
       results: quizResults,
     },
-    completedLessonIds: [...completedLessonIds],
+    completedLessonIds: snapshot.completedLessonIds,
   };
 }
-import type { ProgressRepository } from "./persistence.js";
+import type { ProgressRepository, ProgressSnapshot } from "./persistence.js";
+import type { AppUser } from "./max-auth.js";

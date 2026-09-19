@@ -1,6 +1,7 @@
-import { getProfile, user } from "./data.js";
+import { getProfile } from "./data.js";
 import { getSecurityProgress, listThreats } from "./security-data.js";
 import { listCompletedSimulations } from "./simulation.js";
+import type { AppUser } from "./max-auth.js";
 
 type Achievement = {
   id: string;
@@ -17,11 +18,11 @@ function capped(value: number, target: number) {
   return Math.min(target, Math.max(0, value));
 }
 
-export async function getFullProfile() {
-  const learning = getProfile();
-  const [security, completedSimulations] = await Promise.all([
-    getSecurityProgress(user.id),
-    listCompletedSimulations(),
+export async function getFullProfile(currentUser: AppUser) {
+  const [learning, security, completedSimulations] = await Promise.all([
+    getProfile(currentUser),
+    getSecurityProgress(currentUser.id),
+    listCompletedSimulations(currentUser.id),
   ]);
   const totalTrades = completedSimulations.reduce((sum, item) => sum + item.tradeCount, 0);
   const blockchain = learning.courses.find((course) => course.id === "blockchain")!;
